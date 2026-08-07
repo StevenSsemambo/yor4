@@ -1,0 +1,86 @@
+.calendar__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.calendar__month {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.calendar__weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  font-size: 11px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+.calendar__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.calendar__cell {
+  aspect-ratio: 1;
+  border: none;
+  background: var(--card-bg);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 12px;
+  box-shadow: var(--shadow-card);
+}
+
+.calendar__cell--empty {
+  background: transparent;
+  box-shadow: none;
+}
+
+.calendar__cell--today {
+  outline: 2px solid var(--idea);
+}
+
+.calendar__cell--selected {
+  background: var(--idea-soft);
+}
+
+.calendar__dots {
+  display: flex;
+  gap: 2px;
+}
+
+.calendar__dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+
+.calendar__daypanel {
+  margin-top: 20px;
+}
+
+.calendar__daytitle {
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--paper-light);
+  margin-bottom: 10px;
+}
+
+.calendar__empty {
+  color: var(--paper-light);
+  opacity: 0.8;
+  font-style: italic;
+}

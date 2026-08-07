@@ -1,0 +1,14 @@
+.brand-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--paper-light);
+  opacity: 0.75;
+}
+
+.brand-footer__credit {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-style: italic;
+  opacity: 0.85;
+}

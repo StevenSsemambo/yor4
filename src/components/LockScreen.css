@@ -1,0 +1,67 @@
+.lock {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--wood);
+  background-image:
+    repeating-linear-gradient(90deg, rgba(0,0,0,0.06) 0 1px, transparent 1px 90px),
+    linear-gradient(180deg, var(--wood) 0%, var(--wood-dark) 100%);
+}
+
+.lock__panel {
+  width: min(320px, 88vw);
+  background: var(--card-bg);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: 32px 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+}
+
+.lock__title {
+  margin: 14px 0 0;
+  font-family: var(--font-display);
+  font-size: 18px;
+  color: var(--ink);
+}
+
+.lock__sub {
+  margin: 0 0 14px;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+}
+
+.lock__input {
+  width: 100%;
+  font-family: var(--font-display);
+  font-size: 22px;
+  letter-spacing: 8px;
+  text-align: center;
+  padding: 12px 10px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--rule-strong);
+  background: var(--paper-light);
+  color: var(--ink);
+  margin-bottom: 8px;
+}
+
+.lock__input--error {
+  border-color: var(--danger);
+}
+
+.lock__error {
+  color: var(--danger);
+  font-size: 12.5px;
+  margin: 0 0 12px;
+}
+
+.lock__panel .card__btn {
+  width: 100%;
+  margin-top: 8px;
+}

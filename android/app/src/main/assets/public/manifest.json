@@ -1,0 +1,13 @@
+{
+  "name": "YoRemind",
+  "short_name": "YoRemind",
+  "description": "The drawer that remembers — category-aware reminders.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#2a1d16",
+  "theme_color": "#3b2a20",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

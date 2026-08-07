@@ -1,0 +1,11 @@
+{
+	"appId": "dev.saymytech.yoremind",
+	"appName": "YoRemind",
+	"webDir": "dist",
+	"plugins": {
+		"LocalNotifications": {
+			"smallIcon": "ic_stat_yoremind",
+			"iconColor": "#3b2a20"
+		}
+	}
+}
