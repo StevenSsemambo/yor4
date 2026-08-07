@@ -1,6 +1,7 @@
 .app {
   display: flex;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 .main {
@@ -8,6 +9,7 @@
   min-width: 0;
   padding: 32px 40px 60px;
   max-width: 900px;
+  overflow-x: hidden;
 }
 
 .main__header {
@@ -39,6 +41,8 @@
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .main__add {
@@ -143,7 +147,77 @@
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
+/* ── Quick-glance strip ──────────────────────────────────────
+   Mobile-only "today at a glance" row: total due today, overdue,
+   and a tap-to-filter chip per category. Fills the empty space
+   left at the top of the screen once the desktop sidebar (with
+   its branding block and drawer list) is hidden on phones, and
+   gives a faster jump into a category than opening the More sheet.
+   Hidden entirely on desktop — the sidebar already covers this. */
+.quick-glance {
+  display: none;
+}
+
 @media (max-width: 760px) {
   .app { flex-direction: column; }
-  .main { padding: 16px 16px 84px; max-width: 100%; }
+  .main { padding: 14px 14px 84px; max-width: 100%; }
+
+  .main__header {
+    flex-wrap: wrap;
+  }
+
+  .main__header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .quick-glance {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    margin-bottom: 14px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .quick-glance::-webkit-scrollbar { display: none; }
+
+  .quick-glance__chip {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    min-width: 84px;
+    background: var(--card-bg);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+    padding: 10px 12px;
+    border-top: 3px solid var(--chip-accent, var(--ink-soft));
+  }
+
+  .quick-glance__chip.is-active {
+    outline: 2px solid var(--chip-accent, var(--idea));
+    outline-offset: -1px;
+  }
+
+  .quick-glance__value {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 17px;
+    color: var(--ink);
+    line-height: 1;
+  }
+
+  .quick-glance__value--danger {
+    color: var(--danger);
+  }
+
+  .quick-glance__label {
+    font-family: var(--font-body);
+    font-size: 11px;
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
 }
