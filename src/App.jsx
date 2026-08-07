@@ -11,7 +11,7 @@ import LockScreen from './components/LockScreen';
 import OnboardingTour from './components/OnboardingTour';
 import AlarmOverlay from './components/AlarmOverlay';
 import { api } from './api';
-import { CATEGORIES } from './categories';
+import { CATEGORIES, CATEGORY_ORDER } from './categories';
 import { isLockEnabled } from './services/lockService';
 import { isOnboarded } from './services/onboardingService';
 import { resolveAlarmSound } from './services/notificationPrefs';
@@ -138,6 +138,11 @@ function MainApp() {
     });
     return c;
   }, [reminders, todayReminders]);
+
+  const overdueCount = useMemo(
+    () => reminders.filter((r) => r.effective_status === 'OVERDUE').length,
+    [reminders]
+  );
 
   const baseVisible = useMemo(() => {
     if (view === 'TODAY') return todayReminders;
@@ -268,6 +273,45 @@ function MainApp() {
             )}
           </div>
         </header>
+
+        {showListChrome && (
+          <div className="quick-glance" aria-label="Quick glance">
+            <button
+              className={`quick-glance__chip ${view === 'TODAY' ? 'is-active' : ''}`}
+              style={{ '--chip-accent': 'var(--idea)' }}
+              onClick={() => setView('TODAY')}
+            >
+              <span className="quick-glance__value">{counts.TODAY}</span>
+              <span className="quick-glance__label">Today</span>
+            </button>
+
+            {overdueCount > 0 && (
+              <button
+                className={`quick-glance__chip ${view === 'TODAY' ? 'is-active' : ''}`}
+                style={{ '--chip-accent': 'var(--danger)' }}
+                onClick={() => setView('TODAY')}
+              >
+                <span className="quick-glance__value quick-glance__value--danger">{overdueCount}</span>
+                <span className="quick-glance__label">Overdue</span>
+              </button>
+            )}
+
+            {CATEGORY_ORDER.map((key) => {
+              const cat = CATEGORIES[key];
+              return (
+                <button
+                  key={key}
+                  className={`quick-glance__chip ${view === key ? 'is-active' : ''}`}
+                  style={{ '--chip-accent': cat.accent }}
+                  onClick={() => setView(key)}
+                >
+                  <span className="quick-glance__value">{counts[key]}</span>
+                  <span className="quick-glance__label">{cat.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {showListChrome && (
           <input
