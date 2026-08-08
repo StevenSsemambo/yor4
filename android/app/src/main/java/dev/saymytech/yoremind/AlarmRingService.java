@@ -64,11 +64,48 @@ public class AlarmRingService extends Service {
         startForeground(NOTIF_ID, buildNotification(title, body, reminderId, category));
         startRingingSound(soundFile);
         startVibration();
+        launchAlarmActivity(title, body, reminderId, category);
 
         timeoutHandler.removeCallbacks(timeoutRunnable);
         timeoutHandler.postDelayed(timeoutRunnable, RING_TIMEOUT_MS);
 
         return START_NOT_STICKY;
+    }
+
+    /**
+     * Launches AlarmActivity directly, in addition to the notification's
+     * own setFullScreenIntent() below. A plain full-screen-intent
+     * notification isn't a guarantee on Android 10+ — on Android 14+ it
+     * needs a separate opt-in (canUseFullScreenIntent()), and even when
+     * allowed, some OEM skins quietly downgrade it to a normal heads-up
+     * "peek" that slides itself away after a few seconds, which is what
+     * looked like "the alarm popup disappears on its own" even though the
+     * service and sound were still running underneath it.
+     *
+     * This call happens right after startForeground() above, which is
+     * exactly the documented exemption Android grants: an app with an
+     * active foreground service is allowed to start an activity from the
+     * background (the same mechanism incoming-call screens use) — so this
+     * doesn't depend on the full-screen-intent permission at all.
+     */
+    private void launchAlarmActivity(String title, String body, String reminderId, String category) {
+        Intent activityIntent = new Intent(this, AlarmActivity.class);
+        activityIntent.putExtra("title", title);
+        activityIntent.putExtra("body", body);
+        activityIntent.putExtra("reminderId", reminderId);
+        activityIntent.putExtra("category", category);
+        activityIntent.addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK
+                        | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        | Intent.FLAG_ACTIVITY_SINGLE_TOP
+        );
+        try {
+            startActivity(activityIntent);
+        } catch (Exception ignored) {
+            // A handful of OEM battery managers block this outright; the
+            // full-screen-intent notification below is the fallback path
+            // to the same screen in that case.
+        }
     }
 
     private Notification buildNotification(String title, String body, String reminderId, String category) {

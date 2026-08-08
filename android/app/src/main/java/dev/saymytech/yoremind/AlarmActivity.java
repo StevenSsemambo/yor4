@@ -35,11 +35,27 @@ public class AlarmActivity extends Activity {
         super.onCreate(savedInstanceState);
         showOverLockScreen();
         setContentView(R.layout.activity_alarm);
+        bindReminder(getIntent());
+    }
 
-        String title = getIntent().getStringExtra("title");
-        String body = getIntent().getStringExtra("body");
-        String category = getIntent().getStringExtra("category");
-        final String reminderId = getIntent().getStringExtra("reminderId");
+    // AlarmActivity is launchMode="singleInstance", and it's now launched
+    // from two places for the same alarm (AlarmReceiver directly, and the
+    // ring service's full-screen-intent notification as a fallback) — the
+    // second launch reuses the existing instance and delivers here instead
+    // of onCreate(), so the screen needs to (re)bind from whichever intent
+    // arrives, not just the first one.
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        bindReminder(intent);
+    }
+
+    private void bindReminder(Intent intent) {
+        String title = intent.getStringExtra("title");
+        String body = intent.getStringExtra("body");
+        String category = intent.getStringExtra("category");
+        final String reminderId = intent.getStringExtra("reminderId");
 
         TextView categoryView = findViewById(R.id.alarm_category);
         TextView titleView = findViewById(R.id.alarm_title);
