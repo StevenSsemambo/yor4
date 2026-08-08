@@ -3,6 +3,7 @@ import { db, nextNotifId } from './db/db';
 import { computeAlertTimes } from './services/meetingService';
 import { listReminders, updateStatus, snooze, getReminder } from './services/reminderService';
 import { resolveAlarmSound } from './services/notificationPrefs';
+import { isNativeAndroid, scheduleNativeAlarm, cancelNativeAlarm } from './services/nativeAlarm';
 
 const ACTION_TYPE_ID = 'REMINDER_ACTIONS';
 
@@ -90,6 +91,12 @@ export async function initSoundChannels() {
  * the notification itself, and wires up what happens when someone taps
  * one — straight to the data layer, no need to open the app to act on a
  * reminder. Call this once at app startup (see main.jsx).
+ *
+ * Only used on the web/iOS fallback path. On native Android, alarms ring
+ * through AlarmActivity instead (android/.../AlarmActivity.java), which
+ * has its own native Done/Snooze buttons and reports back via
+ * nativeAlarm.js's consumePendingAlarmAction() — see the poller in
+ * App.jsx.
  */
 export async function initNotificationActions() {
   try {
@@ -133,7 +140,11 @@ export async function initNotificationActions() {
 async function cancelForReminder(reminderId) {
   const existing = await db.notifSchedule.get(reminderId);
   if (existing?.ids?.length) {
-    await LocalNotifications.cancel({ notifications: existing.ids.map((id) => ({ id })) });
+    if (isNativeAndroid()) {
+      for (const id of existing.ids) await cancelNativeAlarm(id);
+    } else {
+      await LocalNotifications.cancel({ notifications: existing.ids.map((id) => ({ id })) });
+    }
   }
   await db.notifSchedule.delete(reminderId);
 }
@@ -143,6 +154,12 @@ async function cancelForReminder(reminderId) {
  * based on its current trigger_at (and, for meetings, the lead-time alert
  * too). Call this after every create / snooze / dose-log / resurface /
  * status-change / delete so the OS-level alarms always match app state.
+ *
+ * On the native Android build, this schedules through AlarmScheduler
+ * (nativeAlarm.js) — a true AlarmManager.setAlarmClock() alarm that
+ * rings and wakes the screen even with the app fully closed. Everywhere
+ * else (web/iOS), it falls back to @capacitor/local-notifications, which
+ * only rings reliably while the app is open or backgrounded in a tab.
  */
 export async function scheduleForReminder(reminder) {
   await cancelForReminder(reminder.id);
@@ -159,52 +176,68 @@ export async function scheduleForReminder(reminder) {
   // alarm, not just what plays inside the open app.
   const soundId = await resolveAlarmSound(reminder);
   const channelId = soundId === 'silent' ? SILENT_CHANNEL_ID : (CHANNELS[soundId]?.id || CHANNELS.classic.id);
+  const soundFile = soundId === 'silent' ? null : (CHANNELS[soundId]?.sound || CHANNELS.classic.sound).replace(/\.wav$/, '');
 
-  const notifications = [];
+  const entries = []; // { id, at, title, body }
   const now = Date.now();
 
   if (reminder.category === 'MEETING') {
     const { leadAlertAt, atTimeAlertAt } = computeAlertTimes(reminder);
     const msg = buildMessage(reminder);
     if (new Date(leadAlertAt).getTime() > now) {
-      notifications.push({
+      entries.push({
         id: await nextNotifId(),
+        at: new Date(leadAlertAt).getTime(),
         title: msg.title,
         body: `Starting in ${reminder.details?.lead_time_mins ?? 15} min — ${msg.body}`,
-        schedule: { at: new Date(leadAlertAt) },
-        extra: { reminderId: reminder.id },
-        actionTypeId: ACTION_TYPE_ID,
-        channelId,
       });
     }
     if (new Date(atTimeAlertAt).getTime() > now) {
-      notifications.push({
+      entries.push({
         id: await nextNotifId(),
+        at: new Date(atTimeAlertAt).getTime(),
         title: msg.title,
         body: msg.body,
-        schedule: { at: new Date(atTimeAlertAt) },
-        extra: { reminderId: reminder.id },
-        actionTypeId: ACTION_TYPE_ID,
-        channelId,
       });
     }
   } else if (new Date(reminder.trigger_at).getTime() > now) {
     const msg = buildMessage(reminder);
-    notifications.push({
+    entries.push({
       id: await nextNotifId(),
+      at: new Date(reminder.trigger_at).getTime(),
       title: msg.title,
       body: msg.body,
-      schedule: { at: new Date(reminder.trigger_at) },
-      extra: { reminderId: reminder.id },
-      actionTypeId: ACTION_TYPE_ID,
-      channelId,
     });
   }
 
-  if (notifications.length === 0) return;
+  if (entries.length === 0) return;
 
-  await LocalNotifications.schedule({ notifications });
-  await db.notifSchedule.put({ reminder_id: reminder.id, ids: notifications.map((n) => n.id) });
+  if (isNativeAndroid()) {
+    for (const entry of entries) {
+      await scheduleNativeAlarm({
+        id: entry.id,
+        at: entry.at,
+        title: entry.title,
+        body: entry.body,
+        soundFile: soundFile || 'alarm_classic',
+        reminderId: reminder.id,
+        category: reminder.category,
+      });
+    }
+  } else {
+    const notifications = entries.map((entry) => ({
+      id: entry.id,
+      title: entry.title,
+      body: entry.body,
+      schedule: { at: new Date(entry.at) },
+      extra: { reminderId: reminder.id },
+      actionTypeId: ACTION_TYPE_ID,
+      channelId,
+    }));
+    await LocalNotifications.schedule({ notifications });
+  }
+
+  await db.notifSchedule.put({ reminder_id: reminder.id, ids: entries.map((e) => e.id) });
 }
 
 export async function cancelAllForReminder(reminderId) {

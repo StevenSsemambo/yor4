@@ -33,6 +33,32 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- ── True alarm-clock pipeline ─────────────────────────────
+             AlarmReceiver is woken directly by AlarmManager (works even
+             with the app process fully killed), starts AlarmRingService
+             to loop the sound + show the full-screen alarm, which in
+             turn launches AlarmActivity over the lock screen. -->
+
+        <receiver
+            android:name=".AlarmReceiver"
+            android:exported="false" />
+
+        <service
+            android:name=".AlarmRingService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
+        <!-- showWhenLocked/turnScreenOn aren't manifest attributes — they're
+             set in AlarmActivity.onCreate() via the Activity APIs (or the
+             equivalent window flags on older Android), since that's the
+             only place the platform exposes them. -->
+        <activity
+            android:name=".AlarmActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:theme="@style/AlarmActivityTheme" />
     </application>
 
     <!-- Permissions -->
@@ -47,4 +73,19 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Needed for the alarm to actually take over the screen when the
+         phone is locked/asleep, and to keep ringing reliably. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- Lets Settings open the "ignore battery optimizations" prompt for
+         this app — several Android OEMs (Tecno/Infinix/itel's HiOS,
+         Samsung, Xiaomi) aggressively kill background apps by default,
+         which silently drops alarms no matter how correctly they're
+         scheduled. This is the single biggest real-world cause of
+         "alarms don't fire when the app is closed" on budget Android
+         phones, so Settings surfaces a button for it. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 </manifest>

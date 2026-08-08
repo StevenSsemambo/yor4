@@ -16,6 +16,14 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Explicit Java 8 language level so the lambda expressions in the
+    // alarm plugin's native code (AlarmActivity.java, etc.) compile
+    // regardless of AGP's default — AGP 8.x usually infers this anyway,
+    // but pinning it removes any ambiguity.
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
     buildTypes {
         release {
             minifyEnabled false

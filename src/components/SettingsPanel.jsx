@@ -5,6 +5,13 @@ import { THEMES, getTheme, setTheme as saveTheme } from '../services/themeServic
 import { getSoundPrefs, setSoundPref, getSpeakEnabled, setSpeakEnabled, SOUND_OPTIONS } from '../services/notificationPrefs';
 import { previewAlarm } from '../services/alarmService';
 import { rescheduleAll } from '../notifications';
+import {
+  isNativeAndroid,
+  checkFullScreenIntentAllowed,
+  openFullScreenIntentSettings,
+  isIgnoringBatteryOptimizations,
+  requestIgnoreBatteryOptimizations,
+} from '../services/nativeAlarm';
 import { CATEGORIES } from '../categories';
 import { SayMyTechWordmark } from '../brand/Logo';
 import './SettingsPanel.css';
@@ -17,14 +24,21 @@ export default function SettingsPanel({ onClose }) {
   const [theme, setThemeState] = useState('wood');
   const [soundPrefs, setSoundPrefsState] = useState({});
   const [speakOn, setSpeakOn] = useState(false);
+  const [fullScreenAllowed, setFullScreenAllowed] = useState(true);
+  const [batteryIgnored, setBatteryIgnored] = useState(true);
   const fileInputRef = useRef(null);
+  const nativeAndroid = isNativeAndroid();
 
   useEffect(() => {
     isLockEnabled().then(setLockOn);
     getTheme().then(setThemeState);
     getSoundPrefs().then(setSoundPrefsState);
     getSpeakEnabled().then(setSpeakOn);
-  }, []);
+    if (nativeAndroid) {
+      checkFullScreenIntentAllowed().then(setFullScreenAllowed);
+      isIgnoringBatteryOptimizations().then(setBatteryIgnored);
+    }
+  }, [nativeAndroid]);
 
   async function handleExport() {
     setBusy(true);
@@ -92,6 +106,16 @@ export default function SettingsPanel({ onClose }) {
     setSpeakOn(next);
   }
 
+  async function handleFixFullScreen() {
+    await openFullScreenIntentSettings();
+    setTimeout(() => checkFullScreenIntentAllowed().then(setFullScreenAllowed), 800);
+  }
+
+  async function handleFixBattery() {
+    await requestIgnoreBatteryOptimizations();
+    setTimeout(() => isIgnoringBatteryOptimizations().then(setBatteryIgnored), 800);
+  }
+
   return (
     <div className="settings-overlay" onClick={onClose}>
       <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
@@ -145,13 +169,41 @@ export default function SettingsPanel({ onClose }) {
             </div>
           ))}
           <p className="settings-section__hint">
-            Alarms sound while YoRemind is open (foreground or a background tab) using the tones
-            above. For alarms to ring reliably with the app fully closed, the drawer needs to be
-            built as the native Android app (already scaffolded under <code>/android</code>) rather
-            than the installed web version — the browser sandbox doesn't allow a closed web app to
-            play custom sound.
+            {nativeAndroid
+              ? 'These tones ring for real — full volume, wakes the screen, keeps going until you tap Done or Snooze — even with YoRemind fully closed.'
+              : 'Alarms sound while YoRemind is open (foreground or a background tab) using the tones above. For alarms to ring reliably with the app fully closed, this needs to be the native Android app rather than the installed web version — the browser sandbox doesn\u2019t allow a closed web app to play custom sound.'}
           </p>
         </section>
+
+        {nativeAndroid && (
+          <section className="settings-section">
+            <h3>Alarm reliability</h3>
+            <p className="settings-section__hint">
+              Two Android settings can silently stop alarms from ringing even though they're
+              scheduled correctly. Worth checking once after installing.
+            </p>
+            <div className="settings-section__row">
+              <span className="settings-section__status">
+                {fullScreenAllowed ? '✅ Full-screen alarms allowed' : '⚠️ Full-screen alarms blocked'}
+              </span>
+              {!fullScreenAllowed && (
+                <button className="card__btn" onClick={handleFixFullScreen}>Fix in Settings</button>
+              )}
+            </div>
+            <div className="settings-section__row">
+              <span className="settings-section__status">
+                {batteryIgnored ? '✅ Battery optimization off for YoRemind' : '⚠️ Battery optimization may kill alarms'}
+              </span>
+              {!batteryIgnored && (
+                <button className="card__btn" onClick={handleFixBattery}>Fix in Settings</button>
+              )}
+            </div>
+            <p className="settings-section__hint">
+              Battery optimization is the more common culprit on Tecno, Infinix, itel, Samsung and
+              Xiaomi phones — those brands are especially aggressive about closing background apps.
+            </p>
+          </section>
+        )}
 
         <section className="settings-section">
           <h3>Voice</h3>

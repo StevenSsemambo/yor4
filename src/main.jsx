@@ -2,7 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
-import { initNotificationActions, initSoundChannels } from './notifications.js'
+import { initNotificationActions, initSoundChannels, rescheduleAll } from './notifications.js'
 import { getTheme, applyTheme } from './services/themeService.js'
 
 // Apply the saved theme before first paint so there's no flash of the
@@ -22,6 +22,13 @@ initNotificationActions();
 // Creates the per-category Android notification channels (each with its
 // own bundled tone) plus the silent channel, so scheduling can reference them.
 initSoundChannels();
+
+// AlarmManager entries (the native ringing alarms) don't survive a phone
+// reboot, and can also be lost if the OS ever kills the app aggressively.
+// Rebuilding them from what's in Dexie every time the app starts is the
+// cheapest way to keep OS-level alarms in sync with app state — each
+// call is a harmless no-op for reminders that are already scheduled.
+rescheduleAll();
 
 // Registers the offline-caching service worker when running as a plain
 // web PWA (installed via Netlify/"Add to Home Screen"). This is what

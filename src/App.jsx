@@ -15,6 +15,7 @@ import { CATEGORIES, CATEGORY_ORDER } from './categories';
 import { isLockEnabled } from './services/lockService';
 import { isOnboarded } from './services/onboardingService';
 import { resolveAlarmSound } from './services/notificationPrefs';
+import { isNativeAndroid, consumePendingAlarmAction } from './services/nativeAlarm';
 import './App.css';
 
 export default function App() {
@@ -91,16 +92,22 @@ function MainApp() {
   useEffect(() => { reload(); }, [reload]);
 
   // ── The actual alarm mechanism ────────────────────────────────────
-  // Capacitor's native local-notification channels (notifications.js)
-  // only fire a real alarm-style sound inside a compiled Android APK.
-  // Running as an installed web PWA — which is how this build is being
-  // tested — the browser's own Notification API can't play a custom
-  // looping tone at all, which is why alerts were landing as a silent
-  // popup. This watcher is the fix for that: while the app is open (in
-  // the foreground or a background tab), it checks every few seconds
-  // for anything now due and raises a full-screen alarm with the sound
-  // the reminder was actually set to use.
+  // On the native Android build, real ringing alarms are handled
+  // entirely outside this webview — AlarmManager wakes AlarmReceiver,
+  // which rings via AlarmRingService and shows AlarmActivity full-screen,
+  // even with the app closed and the screen off (see notifications.js /
+  // android/.../AlarmSchedulerPlugin.java). That fires on its own; this
+  // in-app watcher would just double-ring the same alarm if it also ran
+  // here, so it's skipped entirely on native Android.
+  //
+  // Everywhere else (installed web PWA), there's no native alarm layer
+  // to fall back on — the browser sandbox can't play a custom looping
+  // tone or wake the screen from a closed tab. This watcher is the best
+  // available substitute: while the app is open (foreground or a
+  // background tab), it checks every few seconds for anything now due
+  // and raises a full-screen alarm with the sound the reminder is set to use.
   useEffect(() => {
+    if (isNativeAndroid()) return;
     const timer = setInterval(async () => {
       if (currentAlarm) return; // one alarm at a time; rest wait their turn
       const now = Date.now();
@@ -116,6 +123,29 @@ function MainApp() {
     }, 5000);
     return () => clearInterval(timer);
   }, [reminders, currentAlarm]);
+
+  // Picks up "Done"/"Snooze 1h" taps made on the native full-screen alarm
+  // screen (AlarmActivity), which can't touch Dexie directly since that
+  // only exists inside this webview. It stashes the intended action and
+  // opens the app; this polls for that hand-off and runs it through the
+  // same api.js path every other action in this file uses.
+  useEffect(() => {
+    if (!isNativeAndroid()) return;
+    async function checkPendingAlarmAction() {
+      const pending = await consumePendingAlarmAction();
+      if (!pending) return;
+      try {
+        if (pending.action === 'done') await api.updateStatus(pending.reminderId, 'DONE');
+        else if (pending.action === 'snooze') await api.snooze(pending.reminderId, { minutes: 60 });
+        await reload();
+      } catch {
+        // Reminder may have been deleted since the alarm was scheduled — ignore.
+      }
+    }
+    checkPendingAlarmAction();
+    const timer = setInterval(checkPendingAlarmAction, 4000);
+    return () => clearInterval(timer);
+  }, [reload]);
 
   async function handleAlarmDone() {
     const reminder = currentAlarm?.reminder;
