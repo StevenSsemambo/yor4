@@ -16,6 +16,7 @@ import { isLockEnabled } from './services/lockService';
 import { isOnboarded } from './services/onboardingService';
 import { resolveAlarmSound } from './services/notificationPrefs';
 import { isNativeAndroid, consumePendingAlarmAction } from './services/nativeAlarm';
+import { getPermissionStatus, requestPermission, rescheduleAll, consumeLastScheduleError } from './notifications';
 import './App.css';
 
 export default function App() {
@@ -68,6 +69,22 @@ function MainApp() {
 
   useEffect(() => {
     isOnboarded().then((done) => setShowTour(!done));
+  }, []);
+
+  // Notification permission is never requested automatically by Android —
+  // only an explicit call to requestPermissions() triggers the OS dialog.
+  // Relying on someone finding the small header toggle isn't reliable, so
+  // request it proactively once per install: right after the first-time
+  // tour for new installs, or on first load for anyone already past it.
+  useEffect(() => {
+    isOnboarded().then(async (done) => {
+      if (!done) return; // the tour's own completion triggers this instead — see below
+      const status = await getPermissionStatus();
+      if (status === 'prompt' || status === 'prompt-with-rationale') {
+        const result = await requestPermission();
+        if (result === 'granted') await rescheduleAll();
+      }
+    });
   }, []);
 
   function flashToast(text) {
@@ -251,6 +268,8 @@ function MainApp() {
         default:
           break;
       }
+      const scheduleErr = consumeLastScheduleError();
+      if (scheduleErr) flashToast(`⚠️ Couldn't schedule the alarm: ${scheduleErr}`);
       await reload();
     } catch (err) {
       alert(err.message);
@@ -259,6 +278,8 @@ function MainApp() {
 
   async function handleCreate(payload) {
     await api.create(payload);
+    const err = consumeLastScheduleError();
+    if (err) flashToast(`⚠️ Couldn't schedule the alarm: ${err}`);
     await reload();
   }
 
@@ -403,7 +424,19 @@ function MainApp() {
 
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
 
-      {showTour && <OnboardingTour onDone={() => setShowTour(false)} />}
+      {showTour && (
+        <OnboardingTour
+          onDone={async () => {
+            setShowTour(false);
+            // This is the moment we've just explained *why* alerts matter —
+            // asking right here, instead of leaving it to a header button
+            // someone has to notice on their own, is what actually gets
+            // permission granted in practice.
+            const result = await requestPermission();
+            if (result === 'granted') await rescheduleAll();
+          }}
+        />
+      )}
 
       {toast && <div className="toast">{toast}</div>}
 

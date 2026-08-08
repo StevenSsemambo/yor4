@@ -22,6 +22,16 @@ const CHANNELS = {
 };
 const SILENT_CHANNEL_ID = 'silent-reminders';
 
+// Set whenever a native alarm fails to schedule, so the UI can show the
+// person an actual reason instead of the alarm just never ringing with
+// no explanation anywhere.
+let lastScheduleError = null;
+export function consumeLastScheduleError() {
+  const err = lastScheduleError;
+  lastScheduleError = null;
+  return err;
+}
+
 /** Category-aware phrasing — same copy the Phase-1 push service used. */
 function buildMessage(reminder) {
   const d = reminder.details || {};
@@ -166,8 +176,18 @@ export async function scheduleForReminder(reminder) {
 
   if (!reminder || reminder.status === 'DONE' || !reminder.trigger_at) return;
 
-  const permission = await getPermissionStatus();
-  if (permission !== 'granted') return; // nothing to schedule until the user grants permission
+  const native = isNativeAndroid();
+
+  // Native alarms go through AlarmManager (AlarmScheduler.schedule), which
+  // doesn't require the classic POST_NOTIFICATIONS permission to schedule —
+  // only @capacitor/local-notifications' web/iOS fallback path does. Gating
+  // native scheduling behind that permission was a bug: if someone never
+  // granted notification permission, NOTHING ever got scheduled, silently,
+  // even on native where it wasn't actually required.
+  if (!native) {
+    const permission = await getPermissionStatus();
+    if (permission !== 'granted') return; // web/iOS path genuinely needs this
+  }
 
   // Per-reminder sound choice (falls back to the category default, falls
   // back to that category's signature tone) resolves to one of the real
@@ -212,9 +232,10 @@ export async function scheduleForReminder(reminder) {
 
   if (entries.length === 0) return;
 
-  if (isNativeAndroid()) {
+  if (native) {
+    const errors = [];
     for (const entry of entries) {
-      await scheduleNativeAlarm({
+      const result = await scheduleNativeAlarm({
         id: entry.id,
         at: entry.at,
         title: entry.title,
@@ -223,6 +244,12 @@ export async function scheduleForReminder(reminder) {
         reminderId: reminder.id,
         category: reminder.category,
       });
+      if (!result.ok) errors.push(result.error);
+    }
+    if (errors.length) {
+      // Surfaced so the caller (App.jsx) can show it instead of the
+      // alarm just silently never ringing with no explanation.
+      lastScheduleError = errors[0];
     }
   } else {
     const notifications = entries.map((entry) => ({

@@ -14,14 +14,20 @@ export function isNativeAndroid() {
   return Capacitor.getPlatform() === 'android';
 }
 
-/** Schedules one true ringing alarm. `at` is a millisecond timestamp. */
+/** Schedules one true ringing alarm. `at` is a millisecond timestamp.
+ *  Returns { ok: true } on success, or { ok: false, error } on failure —
+ *  callers should surface `error` somewhere visible (console + a toast),
+ *  since a silently-swallowed native error is exactly what made this
+ *  kind of bug invisible before. */
 export async function scheduleNativeAlarm({ id, at, title, body, soundFile, reminderId, category }) {
-  if (!isNativeAndroid()) return false;
+  if (!isNativeAndroid()) return { ok: false, error: 'not-native' };
   try {
     await AlarmScheduler.schedule({ id, at, title, body, soundFile, reminderId, category });
-    return true;
-  } catch {
-    return false;
+    return { ok: true };
+  } catch (err) {
+    const message = err?.message || String(err);
+    console.error('[nativeAlarm] schedule failed:', message);
+    return { ok: false, error: message };
   }
 }
 
