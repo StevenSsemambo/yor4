@@ -41,8 +41,23 @@ public class AlarmSchedulerPlugin extends Plugin {
 
     @PluginMethod
     public void schedule(PluginCall call) {
-        Integer id = call.getInt("id");
-        Double atMillis = call.getDouble("at");
+        Integer id = readInt(call, "id");
+        // "at" arrives as a string (see nativeAlarm.js) — a 13-digit millisecond
+        // timestamp overflows a 32-bit int and Android's JSON layer stores it as
+        // a Long, which call.getDouble() doesn't reliably recognize, so it was
+        // coming through as silently missing. Read it as a string and parse
+        // manually instead, with a numeric fallback just in case.
+        Long atMillis = null;
+        String atStr = call.getString("at");
+        if (atStr != null) {
+            try {
+                atMillis = Long.parseLong(atStr);
+            } catch (NumberFormatException ignored) { /* fall through to numeric fallback */ }
+        }
+        if (atMillis == null) {
+            Double atDouble = call.getDouble("at");
+            if (atDouble != null) atMillis = atDouble.longValue();
+        }
         if (id == null || atMillis == null) {
             call.reject("Missing 'id' or 'at'");
             return;
@@ -63,10 +78,10 @@ public class AlarmSchedulerPlugin extends Plugin {
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                AlarmManager.AlarmClockInfo info = new AlarmManager.AlarmClockInfo(atMillis.longValue(), pendingIntent);
+                AlarmManager.AlarmClockInfo info = new AlarmManager.AlarmClockInfo(atMillis, pendingIntent);
                 alarmManager.setAlarmClock(info, pendingIntent);
             } else {
-                alarmManager.setExact(AlarmManager.RTC_WAKEUP, atMillis.longValue(), pendingIntent);
+                alarmManager.setExact(AlarmManager.RTC_WAKEUP, atMillis, pendingIntent);
             }
         } catch (SecurityException e) {
             call.reject("Exact-alarm permission not granted: " + e.getMessage());
@@ -78,9 +93,25 @@ public class AlarmSchedulerPlugin extends Plugin {
         call.resolve(ret);
     }
 
+    /** Reads an int robustly regardless of which numeric type Android's JSON
+     *  layer happened to box the JS number as (Integer/Long/Double all show
+     *  up depending on magnitude) — the same class of bridge quirk that
+     *  broke "at" above, worth guarding against everywhere an id crosses in. */
+    private Integer readInt(PluginCall call, String key) {
+        Integer direct = call.getInt(key);
+        if (direct != null) return direct;
+        Double asDouble = call.getDouble(key);
+        if (asDouble != null) return asDouble.intValue();
+        String asString = call.getString(key);
+        if (asString != null) {
+            try { return Integer.parseInt(asString); } catch (NumberFormatException ignored) {}
+        }
+        return null;
+    }
+
     @PluginMethod
     public void cancel(PluginCall call) {
-        Integer id = call.getInt("id");
+        Integer id = readInt(call, "id");
         if (id == null) {
             call.reject("Missing 'id'");
             return;

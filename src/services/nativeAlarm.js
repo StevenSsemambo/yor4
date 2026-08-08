@@ -15,6 +15,11 @@ export function isNativeAndroid() {
 }
 
 /** Schedules one true ringing alarm. `at` is a millisecond timestamp.
+ *  Sent as a string, not a raw number — `at` is a 13-digit millisecond
+ *  timestamp, which overflows a 32-bit int and gets stored as a Long by
+ *  Android's JSON parsing. The native side was reading it strictly as a
+ *  Double, which doesn't reliably recognize a Long, so it silently came
+ *  through as missing. A string sidesteps the type mismatch entirely.
  *  Returns { ok: true } on success, or { ok: false, error } on failure —
  *  callers should surface `error` somewhere visible (console + a toast),
  *  since a silently-swallowed native error is exactly what made this
@@ -22,7 +27,7 @@ export function isNativeAndroid() {
 export async function scheduleNativeAlarm({ id, at, title, body, soundFile, reminderId, category }) {
   if (!isNativeAndroid()) return { ok: false, error: 'not-native' };
   try {
-    await AlarmScheduler.schedule({ id, at, title, body, soundFile, reminderId, category });
+    await AlarmScheduler.schedule({ id, at: String(at), title, body, soundFile, reminderId, category });
     return { ok: true };
   } catch (err) {
     const message = err?.message || String(err);
