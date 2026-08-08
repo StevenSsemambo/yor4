@@ -11,16 +11,33 @@ const emptyState = {
   // medicine — frequencyValue is entered by the user, frequencyUnit picks
   // whether that number means hours or minutes (needed for things like
   // "every 30 minutes", which the old hours-only field couldn't express).
-  dosage: '', frequencyValue: '', frequencyUnit: 'hours', courseDurationDays: '', refillThreshold: '',
+  dosage: '', frequencyValue: '', frequencyUnit: 'hours', courseDurationDays: '', refillThreshold: '', firstDoseAt: '',
   // meeting
   location: '', link: '', attendees: '', durationMins: '', leadTimeMins: '15',
   // idea
   note: '', tags: '', resurfaceIntervalDays: '7',
 };
 
+/** Formats a Date as the local 'YYYY-MM-DDTHH:mm:ss' string a
+ *  `datetime-local` input expects — using local getters (not
+ *  toISOString, which is UTC) so the field shows the time the person
+ *  actually meant, not shifted by their timezone offset. */
+function toLocalInputValue(date) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T` +
+    `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+/** Medicine reminders need a real first-dose time, not "whatever moment
+ *  the form happened to load" — default to a few minutes out so a card
+ *  filed now doesn't read as overdue the instant it's saved. */
+function defaultFirstDoseAt() {
+  return toLocalInputValue(new Date(Date.now() + 5 * 60 * 1000));
+}
+
 export default function AddReminderModal({ onClose, onCreate }) {
   const [category, setCategory] = useState('DEBT');
-  const [form, setForm] = useState(emptyState);
+  const [form, setForm] = useState(() => ({ ...emptyState, firstDoseAt: defaultFirstDoseAt() }));
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const cat = CATEGORIES[category];
@@ -159,6 +176,10 @@ function CategoryFields({ category, form, set }) {
             <span>Dosage</span>
             <input required value={form.dosage} onChange={set('dosage')} placeholder="e.g. 500mg" />
           </label>
+          <label className="field">
+            <span>First dose at</span>
+            <input required type="datetime-local" step="1" value={form.firstDoseAt} onChange={set('firstDoseAt')} />
+          </label>
           <div className="field-row">
             <label className="field field--small">
               <span>Every</span>
@@ -267,6 +288,11 @@ function buildPayload(category, form) {
         frequencyHours,
         courseDurationDays: form.courseDurationDays ? Number(form.courseDurationDays) : undefined,
         refillThreshold: form.refillThreshold ? Number(form.refillThreshold) : undefined,
+        // Without this, medicineService.createMedicineReminder() fell back
+        // to "right now" for every medicine card, which meant it read as
+        // OVERDUE within seconds of being filed regardless of what the
+        // person actually wanted.
+        startAt: form.firstDoseAt ? new Date(form.firstDoseAt).toISOString() : undefined,
       };
     }
     case 'MEETING':

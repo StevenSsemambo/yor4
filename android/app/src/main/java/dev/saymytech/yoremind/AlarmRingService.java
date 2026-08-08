@@ -134,6 +134,22 @@ public class AlarmRingService extends Service {
             } else {
                 mediaPlayer.setAudioStreamType(android.media.AudioManager.STREAM_ALARM);
             }
+            // Belt-and-suspenders on top of setLooping(true): our bundled
+            // tones are all under ~1.2s, and MediaPlayer's native loop flag
+            // is known to silently stop looping short clips on a chunk of
+            // real devices/decoders (plays once, goes quiet, throws no
+            // error, nothing left to catch). An explicit completion
+            // listener that manually rewinds and restarts guarantees the
+            // alarm actually keeps ringing even where the flag alone fails.
+            mediaPlayer.setOnCompletionListener(mp -> {
+                try {
+                    mp.seekTo(0);
+                    mp.start();
+                } catch (Exception ignored) {
+                    // Player was mid-teardown (stopRinging() racing this
+                    // callback) — nothing to restart.
+                }
+            });
             mediaPlayer.start();
         } catch (Exception e) {
             // A missing/corrupt sound file shouldn't stop the alarm from
